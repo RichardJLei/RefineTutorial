@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form, Modal, Input, Checkbox } from "antd";
+import { Form, Modal, Input, Checkbox, Space } from "antd";
 
 interface ColumnDefinition {
   defaultTitle: string;
@@ -12,6 +12,7 @@ interface ColumnDefinition {
 interface TableCustomization {
   title?: string;
   visible: boolean;
+  sortable?: boolean;
 }
 
 // Add type for the accumulator in reduce
@@ -29,6 +30,7 @@ export const useTableCustomization = (baseColumns: ColumnDefinition[]) => {
     ...column,
     title: columnCustomizations[column.key]?.title ?? column.defaultTitle,
     hidden: columnCustomizations[column.key]?.visible === false,
+    sorter: columnCustomizations[column.key]?.sortable ? true : undefined,
   }));
 
   const showCustomizeModal = () => {
@@ -37,6 +39,7 @@ export const useTableCustomization = (baseColumns: ColumnDefinition[]) => {
         ...acc,
         [`${column.key}_title`]: columnCustomizations[column.key]?.title ?? column.defaultTitle,
         [`${column.key}_visible`]: columnCustomizations[column.key]?.visible ?? true,
+        [`${column.key}_sortable`]: columnCustomizations[column.key]?.sortable ?? false,
       }), {})
     );
     setIsModalVisible(true);
@@ -47,12 +50,16 @@ export const useTableCustomization = (baseColumns: ColumnDefinition[]) => {
       const newCustomizations = baseColumns.reduce((acc: CustomizationAccumulator, column) => {
         const customTitle = values[`${column.key}_title`];
         const visible = values[`${column.key}_visible`];
-        const isDefault = customTitle === column.defaultTitle && visible === true;
+        const sortable = values[`${column.key}_sortable`];
+        const isDefault = customTitle === column.defaultTitle && 
+                         visible === true && 
+                         sortable === false;
 
         if (!isDefault) {
           acc[column.key] = {
             title: customTitle,
             visible,
+            sortable,
           };
         }
         return acc;
@@ -86,13 +93,22 @@ export const useTableCustomization = (baseColumns: ColumnDefinition[]) => {
             >
               <Input />
             </Form.Item>
-            <Form.Item 
-              name={`${column.key}_visible`} 
-              valuePropName="checked"
-              style={{ marginBottom: 0, marginTop: '29px' }}
-            >
-              <Checkbox>Show</Checkbox>
-            </Form.Item>
+            <Space style={{ marginTop: '29px' }}>
+              <Form.Item 
+                name={`${column.key}_visible`} 
+                valuePropName="checked"
+                style={{ marginBottom: 0 }}
+              >
+                <Checkbox>Show</Checkbox>
+              </Form.Item>
+              <Form.Item 
+                name={`${column.key}_sortable`} 
+                valuePropName="checked"
+                style={{ marginBottom: 0 }}
+              >
+                <Checkbox>Sort</Checkbox>
+              </Form.Item>
+            </Space>
           </div>
         ))}
       </Form>
