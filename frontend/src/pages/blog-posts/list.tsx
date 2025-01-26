@@ -12,15 +12,8 @@ import { Space, Table, Button, Modal, Form, Input, Checkbox } from "antd";
 import { useState } from "react";
 
 export const BlogPostList: React.FC = () => {
-  // Modify state to include visibility
-  const [columnSettings, setColumnSettings] = useState({
-    title: { title: "Title", visible: true },
-    content: { title: "Content", visible: true },
-    category: { title: "Category", visible: true },
-    createdAt: { title: "Created At", visible: true },
-    actions: { title: "Actions", visible: true }
-  });
-  
+  // Change state to store only customizations
+  const [columnCustomizations, setColumnCustomizations] = useState<Record<string, { title?: string; visible: boolean }>>({});
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
 
@@ -36,54 +29,25 @@ export const BlogPostList: React.FC = () => {
     },
   });
 
-  const showModal = () => {
-    // Set both title and visibility values in form
-    form.setFieldsValue({
-      ...Object.keys(columnSettings).reduce((acc, key) => ({
-        ...acc,
-        [`${key}_title`]: columnSettings[key].title,
-        [`${key}_visible`]: columnSettings[key].visible,
-      }), {})
-    });
-    setIsModalVisible(true);
-  };
-
-  const handleOk = () => {
-    form.validateFields().then((values) => {
-      // Convert form values back to columnSettings format
-      const newSettings = Object.keys(columnSettings).reduce((acc, key) => ({
-        ...acc,
-        [key]: {
-          title: values[`${key}_title`],
-          visible: values[`${key}_visible`],
-        }
-      }), {});
-      setColumnSettings(newSettings);
-      setIsModalVisible(false);
-    });
-  };
-
-  const columns = [
+  // Define base columns first
+  const baseColumns = [
     {
-      title: columnSettings.title.title,
+      defaultTitle: "Title",
       dataIndex: "title",
       key: "title",
-      hidden: !columnSettings.title.visible,
     },
     {
-      title: columnSettings.content.title,
+      defaultTitle: "Content",
       dataIndex: "content",
       key: "content",
-      hidden: !columnSettings.content.visible,
       render: (value: string) => (
         <MarkdownField value={value.slice(0, 80) + "..."} />
       ),
     },
     {
-      title: columnSettings.category.title,
+      defaultTitle: "Category",
       dataIndex: ["category", "id"],
       key: "category.id",
-      hidden: !columnSettings.category.visible,
       render: (value: number) =>
         categoryIsLoading ? (
           <>Loading...</>
@@ -92,17 +56,15 @@ export const BlogPostList: React.FC = () => {
         ),
     },
     {
-      title: columnSettings.createdAt.title,
+      defaultTitle: "Created At",
       dataIndex: "createdAt",
       key: "createdAt",
-      hidden: !columnSettings.createdAt.visible,
       render: (value: string) => <DateField value={value} />,
     },
     {
-      title: columnSettings.actions.title,
+      defaultTitle: "Actions",
       dataIndex: "actions",
       key: "actions",
-      hidden: !columnSettings.actions.visible,
       render: (_: string, record: BaseRecord) => (
         <Space>
           <EditButton hideText size="small" recordItemId={record.id} />
@@ -112,6 +74,48 @@ export const BlogPostList: React.FC = () => {
       ),
     },
   ];
+
+  // Process columns with customizations
+  const columns = baseColumns.map(column => ({
+    ...column,
+    title: columnCustomizations[column.key]?.title ?? column.defaultTitle,
+    hidden: columnCustomizations[column.key]?.visible === false,
+  }));
+
+  const showModal = () => {
+    // Set form values based on current column settings
+    form.setFieldsValue(
+      baseColumns.reduce((acc, column) => ({
+        ...acc,
+        [`${column.key}_title`]: columnCustomizations[column.key]?.title ?? column.defaultTitle,
+        [`${column.key}_visible`]: columnCustomizations[column.key]?.visible ?? true,
+      }), {})
+    );
+    setIsModalVisible(true);
+  };
+
+  const handleOk = () => {
+    form.validateFields().then((values) => {
+      // Convert form values to columnCustomizations format
+      const newCustomizations = baseColumns.reduce((acc, column) => {
+        const customTitle = values[`${column.key}_title`];
+        const visible = values[`${column.key}_visible`];
+        const isDefault = customTitle === column.defaultTitle && visible === true;
+
+        // Only store non-default values
+        if (!isDefault) {
+          acc[column.key] = {
+            title: customTitle,
+            visible,
+          };
+        }
+        return acc;
+      }, {});
+
+      setColumnCustomizations(newCustomizations);
+      setIsModalVisible(false);
+    });
+  };
 
   return (
     <List
@@ -124,8 +128,8 @@ export const BlogPostList: React.FC = () => {
       <Table {...tableProps} rowKey="id">
         {columns
           .filter(column => !column.hidden)
-          .map(({ key, hidden, ...columnProps }) => (
-            <Table.Column key={key} {...columnProps} />
+          .map(({ hidden, defaultTitle, ...columnProps }) => (
+            <Table.Column {...columnProps} />
           ))}
       </Table>
 
@@ -137,22 +141,22 @@ export const BlogPostList: React.FC = () => {
         width={600}
       >
         <Form form={form} layout="vertical">
-          {Object.keys(columnSettings).map((key) => (
-            <div key={key} style={{ 
+          {baseColumns.map((column) => (
+            <div key={column.key} style={{ 
               display: 'flex', 
               gap: '16px', 
               alignItems: 'flex-start',
               marginBottom: '16px' 
             }}>
               <Form.Item 
-                name={`${key}_title`} 
-                label={`${columnSettings[key].title} Column`}
+                name={`${column.key}_title`} 
+                label={`${column.defaultTitle} Column`}
                 style={{ flex: 1, marginBottom: 0 }}
               >
                 <Input />
               </Form.Item>
               <Form.Item 
-                name={`${key}_visible`} 
+                name={`${column.key}_visible`} 
                 valuePropName="checked"
                 style={{ marginBottom: 0, marginTop: '29px' }}
               >
