@@ -10,63 +10,70 @@ import {
 import { type BaseRecord, useMany } from "@refinedev/core";
 import { Space, Table } from "antd";
 
-export const BlogPostList = () => {
+export const BlogPostList: React.FC = () => {
   const { tableProps } = useTable({
     syncWithLocation: true,
   });
 
   const { data: categoryData, isLoading: categoryIsLoading } = useMany({
     resource: "categories",
-    ids:
-      tableProps?.dataSource
-        ?.map((item) => item?.category?.id)
-        .filter(Boolean) ?? [],
+    ids: tableProps?.dataSource?.map((item) => item?.category?.id) ?? [],
     queryOptions: {
       enabled: !!tableProps?.dataSource,
     },
   });
 
+  const columns = [
+    {
+      title: "Title",
+      dataIndex: "title",
+      key: "title",
+    },
+    {
+      title: "Content",
+      dataIndex: "content",
+      key: "content",
+      render: (value: string) => (
+        <MarkdownField value={value.slice(0, 80) + "..."} />
+      ),
+    },
+    {
+      title: "Category",
+      dataIndex: ["category", "id"],
+      key: "category.id",
+      render: (value: number) =>
+        categoryIsLoading ? (
+          <>Loading...</>
+        ) : (
+          categoryData?.data?.find((item) => item.id === value)?.title
+        ),
+    },
+    {
+      title: "Created At",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      render: (value: string) => <DateField value={value} />,
+    },
+    {
+      title: "Actions",
+      dataIndex: "actions",
+      key: "actions",
+      render: (_: string, record: BaseRecord) => (
+        <Space>
+          <EditButton hideText size="small" recordItemId={record.id} />
+          <ShowButton hideText size="small" recordItemId={record.id} />
+          <DeleteButton hideText size="small" recordItemId={record.id} />
+        </Space>
+      ),
+    },
+  ];
+
   return (
     <List>
       <Table {...tableProps} rowKey="id">
-        <Table.Column dataIndex="id" title={"ID"} />
-        <Table.Column dataIndex="title" title={"Title"} />
-        <Table.Column
-          dataIndex="content"
-          title={"Content"}
-          render={(value: any) => {
-            if (!value) return "-";
-            return <MarkdownField value={value.slice(0, 80) + "..."} />;
-          }}
-        />
-        <Table.Column
-          dataIndex={"category"}
-          title={"Category"}
-          render={(value) =>
-            categoryIsLoading ? (
-              <>Loading...</>
-            ) : (
-              categoryData?.data?.find((item) => item.id === value?.id)?.title
-            )
-          }
-        />
-        <Table.Column dataIndex="status" title={"Status"} />
-        <Table.Column
-          dataIndex={["createdAt"]}
-          title={"Created at"}
-          render={(value: any) => <DateField value={value} />}
-        />
-        <Table.Column
-          title={"Actions"}
-          dataIndex="actions"
-          render={(_, record: BaseRecord) => (
-            <Space>
-              <EditButton hideText size="small" recordItemId={record.id} />
-              <ShowButton hideText size="small" recordItemId={record.id} />
-              <DeleteButton hideText size="small" recordItemId={record.id} />
-            </Space>
-          )}
-        />
+        {columns.map(({ key, ...columnProps }) => (
+          <Table.Column key={key} {...columnProps} />
+        ))}
       </Table>
     </List>
   );
