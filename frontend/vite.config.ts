@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      punycode: 'punycode/',
+      punycode: 'punycode',
     },
   },
 });
