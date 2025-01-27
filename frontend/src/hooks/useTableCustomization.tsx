@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form, Modal, Input, Checkbox, Space, Button } from "antd";
+import { Form, Modal, Input, Checkbox, Space, Button, Select } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import type { ColumnType } from "antd/es/table";
 
@@ -23,25 +23,63 @@ type CustomizationAccumulator = {
   [key: string]: TableCustomization;
 };
 
+// Add search type enum
+type SearchType = 'contains' | 'equals' | 'startsWith' | 'endsWith' | 'regex';
+
+interface SearchConfig {
+  text: string;
+  type: SearchType;
+}
+
 export const useTableCustomization = (baseColumns: ColumnDefinition[]) => {
   const [columnCustomizations, setColumnCustomizations] = useState<Record<string, TableCustomization>>({});
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
 
-  // Add state for search text and filtered columns
-  const [searchText, setSearchText] = useState<Record<string, string>>({});
+  // Update searchText state to include search type
+  const [searchText, setSearchText] = useState<Record<string, SearchConfig>>({});
   const [searchedColumns, setSearchedColumns] = useState<string[]>([]);
 
-  const handleSearch = (key: string, value: string) => {
-    setSearchText(prev => ({ ...prev, [key]: value }));
+  const handleSearch = (key: string, value: string, type: SearchType) => {
+    setSearchText(prev => ({ ...prev, [key]: { text: value, type } }));
     setSearchedColumns(prev => 
       value ? [...new Set([...prev, key])] : prev.filter(k => k !== key)
     );
   };
 
   const handleReset = (key: string) => {
-    setSearchText(prev => ({ ...prev, [key]: '' }));
+    setSearchText(prev => ({ ...prev, [key]: { text: '', type: 'contains' } }));
     setSearchedColumns(prev => prev.filter(k => k !== key));
+  };
+
+  // Add function to test value against search pattern
+  const matchesSearchPattern = (value: string, pattern: string, type: SearchType): boolean => {
+    // Handle null/undefined values
+    if (!value) return false;
+    if (!pattern) return true;
+
+    const valueStr = String(value).toLowerCase().trim();
+    const patternStr = String(pattern).toLowerCase().trim();
+
+    switch (type) {
+      case 'contains':
+        return valueStr.includes(patternStr);
+      case 'equals':
+        return valueStr === patternStr;
+      case 'startsWith':
+        return valueStr.startsWith(patternStr);
+      case 'endsWith':
+        return valueStr.endsWith(patternStr);
+      case 'regex':
+        try {
+          const regex = new RegExp(patternStr, 'i');
+          return regex.test(valueStr);
+        } catch (e) {
+          return valueStr.includes(patternStr);
+        }
+      default:
+        return valueStr.includes(patternStr);
+    }
   };
 
   // Process columns with customizations
@@ -57,45 +95,62 @@ export const useTableCustomization = (baseColumns: ColumnDefinition[]) => {
     if (columnCustomizations[column.key]?.filterable) {
       return {
         ...baseColumn,
-        filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: any) => (
-          <div style={{ padding: 8 }}>
-            <Input
-              placeholder={`Search ${baseColumn.title}`}
-              value={selectedKeys[0]}
-              onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-              onPressEnter={() => {
-                confirm();
-                handleSearch(column.key, selectedKeys[0]);
-              }}
-              style={{ marginBottom: 8, display: 'block' }}
-            />
-            <Space>
-              <Button
-                type="primary"
-                onClick={() => {
-                  confirm();
-                  handleSearch(column.key, selectedKeys[0]);
-                }}
-                icon={<SearchOutlined />}
-                size="small"
-                style={{ width: 90 }}
-              >
-                Search
-              </Button>
-              <Button
-                onClick={() => {
-                  clearFilters?.();
-                  handleReset(column.key);
-                  confirm();
-                }}
-                size="small"
-                style={{ width: 90 }}
-              >
-                Reset
-              </Button>
-            </Space>
-          </div>
-        ),
+        filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: any) => {
+          const [searchValue, searchType] = selectedKeys;
+          
+          return (
+            <div style={{ padding: 8 }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Select
+                  value={searchType || 'contains'}
+                  onChange={type => setSelectedKeys([searchValue || '', type])}
+                  style={{ width: '100%' }}
+                >
+                  <Select.Option value="contains">Contains</Select.Option>
+                  <Select.Option value="equals">Equals</Select.Option>
+                  <Select.Option value="startsWith">Starts With</Select.Option>
+                  <Select.Option value="endsWith">Ends With</Select.Option>
+                  <Select.Option value="regex">Regex</Select.Option>
+                </Select>
+                <Input
+                  placeholder={`Search ${baseColumn.title}`}
+                  value={searchValue}
+                  onChange={e => setSelectedKeys([e.target.value, searchType || 'contains'])}
+                  onPressEnter={() => {
+                    confirm();
+                    handleSearch(column.key, searchValue, searchType);
+                  }}
+                  style={{ width: '100%', marginBottom: 8 }}
+                />
+                <Space>
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      confirm();
+                      handleSearch(column.key, searchValue, searchType);
+                    }}
+                    icon={<SearchOutlined />}
+                    size="small"
+                    style={{ width: 90 }}
+                  >
+                    Search
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      clearFilters?.();
+                      handleReset(column.key);
+                      confirm();
+                    }}
+                    size="small"
+                    style={{ width: 90 }}
+                  >
+                    Reset
+                  </Button>
+                </Space>
+              </Space>
+            </div>
+          );
+        },
         filterIcon: (filtered: boolean) => (
           <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
         ),
@@ -103,11 +158,19 @@ export const useTableCustomization = (baseColumns: ColumnDefinition[]) => {
           const fieldValue = Array.isArray(column.dataIndex)
             ? column.dataIndex.reduce((obj, key) => obj?.[key], record)
             : record[column.dataIndex];
-          return fieldValue
-            ? String(fieldValue).toLowerCase().includes(String(value).toLowerCase())
-            : false;
+
+          // Get the search type from selectedKeys
+          const searchConfig = searchText[column.key] || { text: value, type: 'contains' };
+          
+          return matchesSearchPattern(
+            fieldValue,
+            searchConfig.text,
+            searchConfig.type
+          );
         },
-        filteredValue: searchedColumns.includes(column.key) ? [searchText[column.key]] : null,
+        filteredValue: searchedColumns.includes(column.key) 
+          ? [searchText[column.key].text, searchText[column.key].type] 
+          : null,
       } as ColumnType<any>;
     }
 
