@@ -1,4 +1,4 @@
-import { List } from "@refinedev/core";
+import { List } from "@refinedev/antd";
 import { CrystalTable } from "../../components/CrystalTable";
 
 export const CategoryList = () => {

@@ -1,4 +1,5 @@
-import { List, useMany } from "@refinedev/core";
+import { List } from "@refinedev/antd";
+import { useMany } from "@refinedev/core";
 import { CrystalTable } from "../../components/CrystalTable";
 
 export const BlogPostList = () => {
